@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disassembly Evaluation Framework</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-light: #eff6ff;
+            --secondary: #64748b;
+            --success: #10b981;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: #1e293b;
+            margin: 0;
+            padding-bottom: 80px;
+        }
+
+        /* --- Header & Score --- */
+        header {
+            background: var(--card);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .h-title { font-size: 1.25rem; font-weight: 700; color: var(--primary); }
+        
+        .score-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .score-box {
+            text-align: right;
+        }
+        
+        .score-val {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1;
+        }
+
+        .score-label { font-size: 0.75rem; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* --- Main Container --- */
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* --- Accordions --- */
+        .accordion {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            margin-bottom: 1rem;
+        }
+
+        .accordion-header {
+            padding: 1rem 1.5rem;
+            background: var(--card);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid transparent;
+        }
+
+        .accordion-header:hover { background: #f1f5f9; }
+
+        .accordion.open .accordion-header {
+            border-bottom: 1px solid var(--border);
+            background: #f8fafc;
+        }
+
+        .acc-title { font-weight: 600; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+        .acc-weight { font-size: 0.8rem; background: #e2e8f0; padding: 2px 8px; border-radius: 12px; color: var(--secondary); }
+        
+        .acc-score {
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .accordion-content {
+            display: none;
+            padding: 1.5rem;
+        }
+
+        .accordion.open .accordion-content { display: block; }
+
+        /* --- Inputs & Metrics --- */
+        .metric-block {
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 1.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+        .metric-block:last-child { border-bottom: none; margin-bottom: 0; }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-title {
+            font-weight: 600;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* --- Radio Button Styling --- */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .radio-option:hover { background: #f8fafc; }
+        .radio-option.selected { 
+            background: var(--primary-light); 
+            border-color: var(--primary);
+        }
+
+        .radio-option input {
+            margin-top: 0.3rem;
+            accent-color: var(--primary);
+        }
+
+        .radio-text { font-size: 0.9rem; line-height: 1.4; }
+        .radio-val { font-weight: bold; font-size: 0.8rem; color: var(--primary); white-space: nowrap;}
+
+        /* --- Number Input --- */
+        input[type="number"] {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            width: 100px;
+        }
+
+        /* --- Disabled State --- */
+        .metric-block.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .metric-block.disabled .no-info-label,
+        .metric-block.disabled .sources-jump {
+            pointer-events: auto;
+        }
+
+        /* --- Tooltips --- */
+        .info-icon {
+            cursor: help;
+            color: var(--primary);
+            font-weight: bold;
+            font-family: serif;
+            border: 1px solid var(--primary);
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .tooltip-text {
+            display: none;
+            position: absolute;
+            background: #1e293b;
+            color: white;
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            width: 350px;
+            z-index: 200;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            line-height: 1.5;
+        }
+
+        .no-info-label {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* --- Sources Section Specifics --- */
+        .sources-jump {
+            margin-left: 6px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--secondary);
+            border-radius: 6px;
+            padding: 0 6px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            line-height: 18px;
+            transition: all 0.2s;
+        }
+        .sources-jump:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .ref-item {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.5s;
+        }
+        .ref-item:last-child { border-bottom: none; }
+        .ref-item.highlight {
+            background: var(--primary-light);
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+            border-radius: 6px;
+        }
+        .ref-metric { font-weight: 600; color: #334155; font-size: 0.9rem; }
+        .ref-links ul { margin: 0; padding-left: 1.2rem; font-size: 0.9rem; }
+        .ref-links a { color: var(--primary); text-decoration: none; }
+        .ref-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="h-title">Disassembly Evaluation Framework</div>
+    <div class="score-container">
+        <div class="score-box">
+            <div class="score-label">Total Score</div>
+            <div class="score-val"><span id="total-score">0</span>%</div>
+        </div>
+    </div>
+</header>
+
+<div class="container" id="app"></div>
+
+<div class="container">
+    <div class="accordion" id="sources-accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="acc-title">Links & References</div>
+            <div class="acc-score" style="font-size: 0.8rem; font-weight: 400;">Sources</div>
+        </div>
+        <div class="accordion-content">
+            <div id="sources-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="tooltip" class="tooltip-text"></div>
+
+<script>
+    // --- Configuration Data ---
+    const categories = [
+        {
+            id: 'reg',
+            title: 'Regulatory Landscape (ESPR - EU)',
+            weight: 0.20,
+            metrics: [
+                { 
+                    id: 'espr', 
+                    label: 'ESPR Priority Group (Working Plan 2025-2030)', 
+                    type: 'radio', 
+                    info: 'Performance requirements, forcing modularity, and banning destruction. Higher priority leads to greater return rate and feedstock volume.',
+                    options: [
+                        {val: 10, text: 'Priority Group 1 (Action 2026): Iron/Steel, Textiles (Garments), Footwear.'},
+                        {val: 8, text: 'Priority Group 2 (2027 Drafts): Tires, Detergents, Paints, Aluminum.'},
+                        {val: 6, text: 'Priority Group 3 (2028-2029): Furniture, Mattresses, ICT (PCs/Servers).'},
+                        {val: 4, text: 'Non-Priority: General consumer goods not listed above.'},
+                        {val: 2, text: 'Excluded categories (Food, Feed, Medicine).'}
+                    ]
+                },
+                { 
+                    id: 'dpp', 
+                    label: 'Digital Product Passport (DPP)', 
+                    type: 'radio', 
+                    info: 'Digital twin data on composition, dismantling guides, and hazardous materials. Reduces identification and sorting costs.',
+                    options: [
+                        {val: 10, text: 'Full Digital Twin: Complete BoM with locations/masses, hazardous substances mapped, detailed disassembly instructions, dynamic data (SOH).'},
+                        {val: 8, text: 'Advanced DPP: Composition plus partial component-level mapping and some disassembly steps.'},
+                        {val: 5, text: 'Standard DPP: Full material composition and substances of concern; generic guidance but no component-level steps.'},
+                        {val: 3, text: 'Minimal DPP: Product ID and generic use/disposal instructions only.'},
+                        {val: 0, text: 'No DPP: No structured digital data, only label/generic notes.'}
+                    ]
+                },
+                { 
+                    id: 'epr', 
+                    label: 'Extended Producer Responsibility (EPR)', 
+                    type: 'radio', 
+                    info: 'Disassembly often avoids disposal fees. Avoided cost acts as bonus revenue.',
+                    options: [
+                        {val: 10, text: 'Very High: >20€ per unit obligations or strong eco-modulation (≥20%). (e.g., EV Batteries, Vehicles, Large Industrial).'},
+                        {val: 5, text: 'Medium: €2-€20 fees, modulation 10-20%. (e.g., Large appliances, washing machines, large displays).'},
+                        {val: 0, text: 'Low: Fees below €1. (e.g., Small IT, mice, packaging, toys).'}
+                    ]
+                },
+                { 
+                    id: 'repair', 
+                    label: 'Right to Repair / French Repairability Index', 
+                    type: 'number',
+                    min: 1, max: 10,
+                    info: 'Mandates that products be repairable with common tools. Enter score from 1-10.',
+                    default: 0
+                },
+                { 
+                    id: 'crm', 
+                    label: 'EU Critical Raw Materials Act', 
+                    type: 'radio', 
+                    info: 'Benchmark for recycling 25% of strategic raw materials. Subsidies and strategic premiums.',
+                    options: [
+                        {val: 10, text: 'Critical Heavy: EV Batteries (Li, Co, Ni), Magnets (Nd, Dy), Fuel Cells (PGMs).'},
+                        {val: 5, text: 'Critical Light: PCBs (Au, Pd, Ta), High-end industrial electronics.'},
+                        {val: 0, text: 'Non-Critical: Steel, Plastic, Aluminum (High volume, low strategic premium).'}
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'econ',
+            title: 'Economic Viability & Feasibility',
+            weight: 0.25,
+            metrics: [
+                {
+                    id: 'liquidity',
+                    label: 'Secondary Material Market Liquidity',
+                    type: 'radio',
+                    info: 'Ease of selling recovered materials.',
+                    options: [
+                        {val: 10, text: 'High Demand: Immediate buyers available at stable prices.'},
+                        {val: 5, text: 'Mid Demand: Buyers available but prices fluctuate or require aggregation.'},
+                        {val: 0, text: 'Low Demand: Hard to find buyers, mostly scrap value.'}
+                    ]
+                },
+                {
+                    id: 'residual',
+                    label: 'Residual Value (End of Life)',
+                    type: 'radio',
+                    info: 'Value retained compared to original price.',
+                    options: [
+                        {val: 10, text: '> 80% of original price.'},
+                        {val: 7, text: '> 50% of original price.'},
+                        {val: 4, text: '> 20% of original price.'},
+                        {val: 0, text: '≈ 0% (Scrap value only).'}
+                    ]
+                },
+                {
+                    id: 'refurb',
+                    label: 'Refurbishment Yield Rate',
+                    type: 'radio',
+                    info: 'Likelihood of successful refurbishment.',
+                    options: [
+                        {val: 10, text: 'Very Likely: Product is durable and modular.'},
+                        {val: 5, text: 'Likely: Requires some repairs but feasible.'},
+                        {val: 0, text: 'Not Refurbishable: Sealed or degraded.'}
+                    ]
+                },
+                {
+                    id: 'harvest',
+                    label: 'Component Harvesting Potential',
+                    type: 'radio',
+                    info: 'Potential to extract working parts for spare markets.',
+                    options: [
+                        {val: 10, text: 'High Potential: Valuable spares (GPUs, Control Boards).'},
+                        {val: 5, text: 'Mid Potential: Standard parts.'},
+                        {val: 0, text: 'Low Potential: No valuable sub-components.'}
+                    ]
+                },
+                {
+                    id: 'logistics',
+                    label: 'Reverse Logistics Economics',
+                    type: 'radio',
+                    info: 'Cost to collect and transport used products.',
+                    options: [
+                        {val: 10, text: 'Low Cost: Local collection or high density.'},
+                        {val: 5, text: 'Mid Cost: Standard courier/freight.'},
+                        {val: 0, text: 'High Cost: Hazardous shipping or heavy/bulky items.'}
+                    ]
+                },
+                {
+                    id: 'infra',
+                    label: 'Infrastructure Readiness',
+                    type: 'radio',
+                    info: 'Availability of recycling/refurbishment facilities.',
+                    options: [
+                        {val: 10, text: 'Established: Standard processes exist.'},
+                        {val: 5, text: 'Partly Established: Pilots or niche players.'},
+                        {val: 0, text: 'Not Available: Requires new facility investment.'}
+                    ]
+                },
+                {
+                    id: 'diss_cost',
+                    label: 'Disassembly Cost vs. Material Value',
+                    type: 'radio',
+                    info: 'Ratio of labor/machine cost to recovered value.',
+                    options: [
+                        {val: 10, text: 'Low Cost Ratio: Value far exceeds disassembly cost.'},
+                        {val: 5, text: 'Mid Cost Ratio: Break-even territory.'},
+                        {val: 0, text: 'High Cost Ratio: Cost exceeds recovered value.'}
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'tech',
+            title: 'Technical Metrics',
+            weight: 0.25,
+            metrics: [
+                {
+                    id: 'complexity',
+                    label: 'Product Complexity',
+                    type: 'radio',
+                    info: 'Fastening types, component count, and modularity.',
+                    options: [
+                        {val: 10, text: 'Simple: Few modular parts, mechanical fasteners.'},
+                        {val: 8, text: 'Low: Mostly screws, some snap-fits.'},
+                        {val: 4, text: 'Medium: Mixed fasteners, moderate modularity.'},
+                        {val: 2, text: 'High: Adhesives, many component types.'},
+                        {val: 0, text: 'Very High: Welded, riveted, non-modular.'}
+                    ]
+                },
+                {
+                    id: 'instruct',
+                    label: 'Disassembly Instructions',
+                    type: 'radio',
+                    info: 'Availability of documentation.',
+                    options: [
+                        {val: 10, text: 'Official Service Manuals available.'},
+                        {val: 5, text: 'Generic / Community created guides.'},
+                        {val: 0, text: 'None available.'}
+                    ]
+                },
+                {
+                    id: 'hazards',
+                    label: 'Safe Handling / Hazardous Substances',
+                    type: 'radio',
+                    info: 'Hazards increase legal complexity and safety costs.',
+                    options: [
+                        {val: 10, text: 'None to Minimal.'},
+                        {val: 5, text: 'Some (Batteries, Capacitors).'},
+                        {val: 0, text: 'Significant (Chemicals, Gases, Radiation).'}
+                    ]
+                },
+                {
+                    id: 'purity',
+                    label: 'Component Compose (Material Purity)',
+                    type: 'radio',
+                    info: 'Striving for material purity after disassembly.',
+                    options: [
+                        {val: 10, text: 'High Purity Mono-fractions (Deep disassembly).'},
+                        {val: 5, text: 'Partially Separated.'},
+                        {val: 0, text: 'Mixed / Contaminated fractions (Shallow disassembly).'}
+                    ]
+                },
+                {
+                    id: 'resale',
+                    label: 'Component Composition (Resale Value)',
+                    type: 'radio',
+                    info: 'Market value of specific OEM parts.',
+                    options: [
+                        {val: 10, text: 'High Resale Value: Expensive/unavailable OEM parts (e.g., Server fans).'},
+                        {val: 5, text: 'Commodity Repair: High volume, standard parts (e.g., Screens).'},
+                        {val: 0, text: 'Disposable Design: Repair impossible without destruction.'}
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'time',
+            title: 'Time Horizon & Market',
+            weight: 0.15,
+            metrics: [
+                {
+                    id: 'trans',
+                    label: 'Technology Transition (Obsolescence Risk)',
+                    type: 'radio',
+                    info: 'Risk of product becoming obsolete before disassembly pays off.',
+                    options: [
+                        {val: 10, text: 'Low Risk (> 7 years).'},
+                        {val: 5, text: 'Medium Risk (3-7 years).'},
+                        {val: 0, text: 'High Risk (< 3 years).'}
+                    ]
+                },
+                {
+                    id: 'stability',
+                    label: 'Product Flow Stability',
+                    type: 'radio',
+                    info: 'Predictability of return volumes.',
+                    options: [
+                        {val: 10, text: 'Stable.'},
+                        {val: 5, text: 'Moderate.'},
+                        {val: 0, text: 'Unstable.'}
+                    ]
+                },
+                {
+                    id: 'variety',
+                    label: 'Product Variety',
+                    type: 'radio',
+                    info: 'High variety makes automation difficult.',
+                    options: [
+                        {val: 10, text: 'Low Variety.'},
+                        {val: 5, text: 'Medium Variety.'},
+                        {val: 0, text: 'High Variety.'}
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'sust',
+            title: 'Sustainability Metrics',
+            weight: 0.15,
+            metrics: [
+                {
+                    id: 'mat_content',
+                    label: 'Recycled Material Content',
+                    type: 'number',
+                    min: 0, max: 10,
+                    info: 'Percentage (0 - 100%) of secondary materials used in production.',
+                    default: 0
+                },
+                {
+                    id: 'impact',
+                    label: 'Reducing Impact on Pollution',
+                    type: 'radio',
+                    info: 'Environmental benefit of disassembly.',
+                    options: [
+                        {val: 10, text: 'High Reduction.'},
+                        {val: 5, text: 'Medium Reduction.'},
+                        {val: 0, text: 'Low Reduction.'}
+                    ]
+                }
+            ]
+        }
+    ];
+
+    // --- References Data ---
+    const metricSources = {
+        espr: [
+            { label: 'EC - ESPR Overview', url: 'https://commission.europa.eu/energy-climate-change-environment/standards-tools-and-labels/products-labelling-rules-and-requirements/ecodesign-sustainable-products-regulation_en' },
+            { label: 'EC - Working Plan 2025-2030', url: 'https://green-forum.ec.europa.eu/news/2025-2030-working-plan-2025-07-11_en' }
+        ],
+        dpp: [
+            { label: 'EU Digital Product Passport', url: 'https://data.europa.eu/en/news-events/news/eus-digital-product-passport-advancing-transparency-and-sustainability' }
+        ],
+        epr: [
+            { label: 'Deutsche Recycling - EPR Costs', url: 'https://deutsche-recycling.com/blog/cost-analysis-of-epr-compliance-in-germany/' },
+            { label: 'Ecologic France - EEE Fee Table (PDF)', url: 'https://www.ecologic-france.com/images/medias/document/26503/EEE-Household-Price-list-01-01-2025-ENv062025.pdf' }
+        ],
+        repair: [
+            { label: 'French Repairability Index Info', url: 'https://www.service-public.gouv.fr/particuliers/actualites/A18330?lang=en' },
+            { label: 'Index Lookup (in French)', url: 'https://www.indicereparabilite.fr/' }
+
+        ],
+        crm: [
+            { label: 'EU Critical Raw Materials Act', url: 'https://www.gov.ie/en/department-of-climate-energy-and-the-environment/publications/critical-raw-materials-act/' }
+        ],
+        hazards: [
+            { label: 'EU Regulations on Hazardous Substances (RoHS)', url: 'https://environment.ec.europa.eu/topics/waste-and-recycling/rohs-directive_en' }
+        ]
+    };
+
+    // --- State Management ---
+    const state = {};
+
+    function initState() {
+        categories.forEach(cat => {
+            state[cat.id] = { metrics: {} };
+            cat.metrics.forEach(m => {
+                state[cat.id].metrics[m.id] = {
+                    value: m.default !== undefined ? m.default : (m.options ? m.options[0].val : 0),
+                    noInfo: false,
+                    max: 10
+                };
+            });
+        });
+    }
+
+    // --- Rendering ---
+    function renderApp() {
+        const app = document.getElementById('app');
+        app.innerHTML = '';
+
+        categories.forEach(cat => {
+            app.appendChild(createAccordion(cat));
+        });
+
+        renderSources();
+        updateScores();
+    }
+
+    function createAccordion(cat) {
+        const el = document.createElement('div');
+        el.className = 'accordion';
+        el.innerHTML = `
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <div class="acc-title">
+                    ${cat.title} 
+                    <span class="acc-weight">${(cat.weight * 100).toFixed(0)}%</span>
+                </div>
+                <div class="acc-score" id="score-${cat.id}">0.0 / 10</div>
+            </div>
+            <div class="accordion-content">
+                ${cat.metrics.map(m => createMetricBlock(cat.id, m)).join('')}
+            </div>
+        `;
+        return el;
+    }
+
+    function createMetricBlock(catId, metric) {
+        let inputHtml = '';
+        
+        if (metric.type === 'radio') {
+            inputHtml = `<div class="radio-group">
+                ${metric.options.map((opt, idx) => `
+                    <label class="radio-option ${idx === 0 ? 'selected' : ''}" id="opt-${metric.id}-${opt.val}">
+                        <input type="radio" name="${metric.id}" value="${opt.val}" 
+                            ${idx === 0 ? 'checked' : ''} 
+                            onchange="updateRadio('${catId}', '${metric.id}', this)">
+                        <span class="radio-val">[${opt.val}]</span>
+                        <span class="radio-text">${opt.text}</span>
+                    </label>
+                `).join('')}
+            </div>`;
+        } else if (metric.type === 'number') {
+            inputHtml = `<input type="number" value="${metric.default || 0}" min="${metric.min}" max="${metric.max}" 
+                oninput="updateNumber('${catId}', '${metric.id}', this.value)"> (Score 1-10)`;
+        }
+
+        // Add Source Jump button if sources exist
+        let jumpBtn = '';
+        if(metricSources[metric.id]) {
+            jumpBtn = `<button type="button" class="sources-jump" onclick="scrollToSources('${metric.id}')" title="Jump to sources">↘</button>`;
+        }
+
+        return `
+            <div class="metric-block" id="block-${metric.id}">
+                <div class="metric-header">
+                    <div class="metric-title">
+                        ${metric.label}
+                        <div class="info-icon" onmouseover="showTooltip(event, '${metric.info.replace(/'/g, "\\'")}')" onmouseout="hideTooltip()">i</div>
+                        ${jumpBtn}
+                    </div>
+                    <label class="no-info-label">
+                        <input type="checkbox" onchange="toggleNoInfo('${catId}', '${metric.id}', this.checked)"> No Info
+                    </label>
+                </div>
+                ${inputHtml}
+            </div>
+        `;
+    }
+
+    // --- Sources Logic ---
+    function renderSources() {
+        const root = document.getElementById('sources-list');
+        if(!root) return;
+
+        let html = '';
+        categories.forEach(cat => {
+            cat.metrics.forEach(m => {
+                if(metricSources[m.id]) {
+                    const links = metricSources[m.id].map(l => 
+                        `<li><a href="${l.url}" target="_blank">${l.label}</a></li>`
+                    ).join('');
+                    
+                    html += `
+                        <div class="ref-item" id="ref-${m.id}">
+                            <div class="ref-metric">${m.label}</div>
+                            <div class="ref-links"><ul>${links}</ul></div>
+                        </div>
+                    `;
+                }
+            });
+        });
+        
+        if(html === '') html = '<div style="padding:1rem; color:#64748b;">No specific references linked yet.</div>';
+        root.innerHTML = html;
+    }
+
+    function scrollToSources(metricId) {
+        // 1. Find the sources accordion and force open it
+        const acc = document.getElementById('sources-accordion');
+        if (!acc.classList.contains('open')) {
+            acc.classList.add('open');
+        }
+
+        // 2. Scroll the accordion into view
+        acc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // 3. Highlight specific row
+        setTimeout(() => {
+            const row = document.getElementById(`ref-${metricId}`);
+            if(row) {
+                row.classList.add('highlight');
+                // Scroll specifically to the row inside the accordion
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => row.classList.remove('highlight'), 2000);
+            }
+        }, 300);
+    }
+
+    // --- Logic & Events ---
+
+    function toggleAccordion(header) {
+        header.parentElement.classList.toggle('open');
+    }
+
+    function showTooltip(e, text) {
+        const tt = document.getElementById('tooltip');
+        tt.innerHTML = text;
+        tt.style.display = 'block';
+        tt.style.left = (e.pageX + 15) + 'px';
+        tt.style.top = (e.pageY + 15) + 'px';
+    }
+
+    function hideTooltip() {
+        document.getElementById('tooltip').style.display = 'none';
+    }
+
+    function updateRadio(catId, metricId, radio) {
+        const block = document.getElementById(`block-${metricId}`);
+        const options = block.querySelectorAll('.radio-option');
+        options.forEach(opt => opt.classList.remove('selected'));
+        radio.parentElement.classList.add('selected');
+
+        state[catId].metrics[metricId].value = parseFloat(radio.value);
+        updateScores();
+    }
+
+    function updateNumber(catId, metricId, value) {
+        let val = parseFloat(value);
+        if(isNaN(val)) val = 0;
+        if(val > 10) val = 10;
+        if(val < 0) val = 0;
+        state[catId].metrics[metricId].value = val;
+        updateScores();
+    }
+
+    function toggleNoInfo(catId, metricId, checked) {
+        state[catId].metrics[metricId].noInfo = checked;
+        const block = document.getElementById(`block-${metricId}`);
+        if(checked) {
+            block.classList.add('disabled');
+        } else {
+            block.classList.remove('disabled');
+        }
+        updateScores();
+    }
+
+    function updateScores() {
+        let finalScore = 0;
+        let totalWeightDivisor = 0;
+
+        categories.forEach(cat => {
+            let catTotalPoints = 0;
+            let catMaxPoints = 0;
+            let hasData = false;
+
+            Object.keys(state[cat.id].metrics).forEach(mId => {
+                const metric = state[cat.id].metrics[mId];
+                if (!metric.noInfo) {
+                    hasData = true;
+                    catTotalPoints += metric.value;
+                    catMaxPoints += metric.max;
+                }
+            });
+
+            const catScoreDisplay = document.getElementById(`score-${cat.id}`);
+            
+            if (hasData && catMaxPoints > 0) {
+                const rawScore = (catTotalPoints / catMaxPoints) * 10;
+                catScoreDisplay.innerText = `${rawScore.toFixed(1)} / 10`;
+                catScoreDisplay.style.color = '#64748b';
+
+                finalScore += rawScore * cat.weight;
+                totalWeightDivisor += cat.weight;
+            } else {
+                catScoreDisplay.innerText = "N/A";
+                catScoreDisplay.style.color = '#cbd5e1';
+            }
+        });
+
+        let displayTotal = 0;
+        if (totalWeightDivisor > 0) {
+            const normalizedTotal = finalScore / totalWeightDivisor;
+            displayTotal = normalizedTotal * 10;
+        }
+
+        document.getElementById('total-score').innerText = displayTotal.toFixed(1);
+    }
+
+    // Init
+    initState();
+    renderApp();
+
+</script>
+</body>
+</html>
